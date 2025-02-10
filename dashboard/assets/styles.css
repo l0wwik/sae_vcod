@@ -163,3 +163,11 @@ body {
     color: #34495e;
     margin-top: 20px;
 }
+
+/* === Page 3 === */
+.table-cell img {
+    width: 100px; 
+    height: auto;
+    border-radius: 5px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
