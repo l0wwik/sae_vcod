@@ -1,0 +1,107 @@
+import requests
+import pandas as pd
+
+# URL de ton API
+API_URL = "http://localhost:5000" 
+
+# Fonction pour récupérer les données d'une API et les convertir en DataFrame
+def fetch_data_from_api(endpoint):
+    response = requests.get(f"{API_URL}/{endpoint}")
+    if response.status_code == 200:
+        data = response.json()
+        print(f"Data retrieved from {endpoint}: {data}")  # Log des données récupérées
+        if isinstance(data, list):  # Vérifie si c'est une liste de dictionnaires
+            return pd.DataFrame(data)
+        else:
+            print(f"Erreur : Les données de {endpoint} ne sont pas dans un format de liste.")
+            return pd.DataFrame()
+    else:
+        print(f"Erreur lors de la récupération des données depuis {endpoint}. Statut : {response.status_code}")
+        return pd.DataFrame()
+
+
+
+
+# données topbar
+def get_data_topbar():
+    temp_df = fetch_data_from_api("sensor_dht")
+    air_quality_df = fetch_data_from_api("sensor_air_quality")
+    
+    # Construire un DataFrame unique avec les colonnes "temperature", "humidity", "co2"
+    data = {
+        "temperature": temp_df["temperature"].iloc[-1] if not temp_df.empty else None,
+        "humidity": temp_df["humidity"].iloc[-1] if not temp_df.empty else None,
+        "co2": air_quality_df["co2"].iloc[-1] if not air_quality_df.empty else None
+    }
+    return pd.DataFrame([data])
+
+
+
+# Fonction pour récupérer les données de tous les capteurs
+def get_sensor_data():
+    # On utilise plusieurs endpoints pour chaque capteur
+    temp_df = fetch_data_from_api("sensor_dht")
+    air_quality_df = fetch_data_from_api("sensor_air_quality")
+    sound_df = fetch_data_from_api("sensor_sound")
+    
+    # Fusionner les DataFrames pour obtenir toutes les données
+    # On ajoute des colonnes "capteur" et "donnees" à chaque DataFrame
+    temp_df["capteur"] = "Température"
+    temp_df["donnees"] = temp_df["temperature"]
+
+    air_quality_df["capteur"] = air_quality_df.apply(lambda x: "CO2" if x["co2"] else "TVOC", axis=1)
+    air_quality_df["donnees"] = air_quality_df[["co2", "tvoc"]].bfill(axis=1).iloc[:, 0]
+
+    sound_df["capteur"] = "Niveau sonore"
+    sound_df["donnees"] = sound_df["sound_level"]
+
+    # Combiner tous les capteurs dans un seul DataFrame
+    all_data = pd.concat([temp_df, air_quality_df, sound_df], ignore_index=True)
+    all_data["date"] = all_data["timestamp"].dt.date
+    all_data["heure"] = all_data["timestamp"].dt.time
+    return all_data
+
+# Fonction pour récupérer les données des 50 dernières entrées
+def get_last_entries():
+    return fetch_data_from_api("images")  # Récupère les images et les empreintes faciales
+
+# graph 1
+def get_graph1_data():
+    return fetch_data_from_api("sensor_dht")
+
+# graph 2
+def get_graph2_data():
+    return fetch_data_from_api("sensor_sound")
+
+# graph 3
+def get_graph3_data():
+    return fetch_data_from_api("sensor_air_quality")
+
+# graph 4
+def get_graph4_data():
+    return fetch_data_from_api("sensor_dht")
+
+# Etat
+def get_state():
+    # On utilise plusieurs endpoints pour obtenir les dernières valeurs des capteurs
+    sound_df = fetch_data_from_api("sensor_sound")
+    humidity_df = fetch_data_from_api("sensor_dht")
+    temperature_df = fetch_data_from_api("sensor_dht")
+    tvoc_df = fetch_data_from_api("sensor_air_quality")
+    co2_df = fetch_data_from_api("sensor_air_quality")
+
+    # Récupérer les dernières valeurs
+    sound = sound_df["sound_level"].iloc[-1] if not sound_df.empty else 0
+    humidity = humidity_df["humidity"].iloc[-1] if not humidity_df.empty else 50
+    temperature = temperature_df["temperature"].iloc[-1] if not temperature_df.empty else 22
+    tvoc = tvoc_df["tvoc"].iloc[-1] if not tvoc_df.empty else 0
+    co2 = co2_df["co2"].iloc[-1] if not co2_df.empty else 400
+
+    # Vérifications des seuils
+    bool_sound = 1 if sound >= 70 else 0
+    bool_humidity = 1 if humidity >= 60 or humidity <= 40 else 0
+    bool_temp = 1 if temperature >= 25 or temperature <= 18 else 0
+    bool_tvoc = 1 if tvoc >= 750 else 0
+    bool_co2 = 1 if co2 >= 1000 else 0
+
+    return bool_sound + bool_humidity + bool_temp + bool_tvoc + bool_co2
