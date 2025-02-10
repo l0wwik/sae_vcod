@@ -1,35 +1,42 @@
 from dash import dcc, html
+import dash_daq as daq
 import plotly.express as px
-from db_connection import fetch_data  # Import de la fonction fetch_data
+from db_connection import get_graph1_data, get_graph2_data, get_graph3_data, get_graph4_data
 
 def layout():
     # 1️⃣ Graphique sur la température
-    query_temp = "SELECT timestamp, temperature FROM sensor_DHT ORDER BY timestamp ASC"
-    df_temp = fetch_data(query_temp)
+    df_temp = get_graph1_data()
     fig_temp = px.line(
         df_temp, x='timestamp', y='temperature',
         title="Évolution de la Température"
     )
 
-    # 2️⃣ Graphique sur le niveau sonore
-    query_sound = "SELECT timestamp, sound_level FROM sensor_Sound ORDER BY timestamp ASC"
-    df_sound = fetch_data(query_sound)
-    fig_sound = px.line(
-        df_sound, x='timestamp', y='sound_level',
-        title="Niveau Sonore dans la Pièce"
+    # 2️⃣ Graphique sur le niveau sonore (Jauge)
+    df_sound = get_graph2_data()
+    # Prenons la valeur la plus récente du niveau sonore
+    latest_sound_level = df_sound['sound_level'].iloc[-1] if not df_sound.empty else 0
+
+    # Jauge pour le niveau sonore
+    gauge_sound = daq.Gauge(
+        id='sound-gauge',
+        label="Niveau Sonore",
+        value=latest_sound_level,
+        min=0,
+        max=100,  # Met une valeur max adaptée à ton échelle de son
+        showCurrentValue=True,
+        units="dB",  # Unité, à adapter en fonction de ce que tu mesures
+        color={"gradient": True, "ranges": {"red": [80, 100], "yellow": [40, 80], "green": [0, 40]}},
     )
 
     # 3️⃣ Graphique sur la qualité de l'air (CO₂)
-    query_air = "SELECT timestamp, co2 FROM sensor_AirQuality ORDER BY timestamp ASC"
-    df_air = fetch_data(query_air)
+    df_air = get_graph3_data()
     fig_air = px.line(
         df_air, x='timestamp', y='co2',
         title="Évolution du CO₂ dans la Pièce"
     )
 
     # 4️⃣ Histogramme sur l'humidité
-    query_humidity = "SELECT humidity FROM sensor_DHT"
-    df_humidity = fetch_data(query_humidity)
+    df_humidity = get_graph4_data()
     fig_humidity = px.histogram(
         df_humidity, x='humidity', nbins=20,
         title="Distribution de l'Humidité"
@@ -40,7 +47,7 @@ def layout():
         html.H2("Graphiques des Capteurs", style={'textAlign': 'center'}),
         html.Div([
             html.Div(dcc.Graph(figure=fig_temp), className="graph-container"),
-            html.Div(dcc.Graph(figure=fig_sound), className="graph-container")
+            html.Div(gauge_sound, className="graph-container")  # Remplacement du graphique son par la jauge
         ], className="graph-row"),
         html.Div([
             html.Div(dcc.Graph(figure=fig_air), className="graph-container"),
