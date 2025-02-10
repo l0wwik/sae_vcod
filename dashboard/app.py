@@ -1,6 +1,7 @@
 import dash
 from dash import dcc, html, Input, Output
-from navbar import sidebar
+from components.sidebar import sidebar
+from components.topbar import topbar
 from pages import page_1, page_2, page_3  # Import des pages
 
 # Initialisation de l'application
@@ -18,7 +19,10 @@ CONTENT_STYLE = {
 app.layout = html.Div([
     dcc.Location(id='url', refresh=False),
     sidebar,  # Barre de navigation latérale
-    html.Div(id='page-content', style=CONTENT_STYLE)
+    html.Div([
+        topbar(),  # Topbar visible sur toutes les pages
+        html.Div(id='page-content')
+    ], style=CONTENT_STYLE)
 ])
 
 # Callback pour afficher la bonne page
