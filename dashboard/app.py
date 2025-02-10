@@ -5,7 +5,7 @@ from components.topbar import topbar
 from pages import page_1, page_2, page_3  # Import des pages
 
 # Initialisation de l'application
-app = dash.Dash(__name__)
+app = dash.Dash(__name__, suppress_callback_exceptions=True)
 app.title = "Dashboard"
 server = app.server  # Pour déploiement sur un serveur si nécessaire
 

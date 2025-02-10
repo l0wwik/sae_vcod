@@ -172,8 +172,31 @@ body {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* === Styles pour les graphiques === */
-.graph-container .daq-Gauge {
-    height: 350px;
-    margin-top: 20px;
+/* === Filtre 3 === */
+.filter-container {
+    display: flex;
+    align-items: center; 
+    justify-content: flex-start; 
+    margin: 10px 0;
 }
+
+.filter-container .filter-label {
+    font-weight: bold;
+    font-size: 14px;
+    margin-right: 10px;
+    line-height: 1.5; 
+}
+
+.dropdown-filter {
+    width: 200px;   
+    font-size: 14px;
+}
+
+/* === Graphique Sonore === */
+.sound-gauge {
+    background-color: white;
+    /*border-radius: 8px;*/
+    /*box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);*/
+    padding: 20px;
+}
+

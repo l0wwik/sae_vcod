@@ -1,5 +1,5 @@
 from dash import html
-from db_connection import get_data_topbar
+from db_connection import get_data_topbar, get_state
 import pandas as pd
 
 
@@ -41,20 +41,32 @@ def topbar():
         else:
             return 'white', f"{c} ppm"  
 
+    def state_color(s):
+        match s:
+            case 0 :
+                return 'white'
+            case 1 | 2:
+                return 'yellow'
+            case 3 | 4:
+                return 'orange'
+            case 5:
+                return 'red'
+
     # Définir les couleurs et les valeurs formatées
     temp_color, temperature = temperature_color(temperature)
     hum_color, humidity = humidity_color(humidity)
     co2_color, co2 = co2_color(co2)
     
-    # Données statiques pour la lumière
-    light_level = "750 lux"
+    
+    state = get_state()
+    state_color = state_color(state)
 
     # Organiser les données dans un dictionnaire avec les couleurs
     sensor_data = {
         "Température": (temperature, temp_color),
         "Humidité": (humidity, hum_color),
         "CO2": (co2, co2_color),
-        "Etat de la Lumière": (light_level, 'white')  # remplacer par etat 
+        "Etat": (state, state_color)  
     }
 
     cards = [

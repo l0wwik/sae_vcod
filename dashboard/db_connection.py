@@ -70,10 +70,48 @@ def get_graph2_data():
 
 # graph 3
 def get_graph3_data():
-    query_air = "SELECT timestamp, co2 FROM sensor_AirQuality ORDER BY timestamp ASC"
+    query_air = """
+        SELECT timestamp, co2, tvoc 
+        FROM sensor_AirQuality 
+        ORDER BY timestamp ASC
+    """
     return fetch_data(query_air)
 
 # graph 4
 def get_graph4_data():
     query_humidity = "SELECT humidity FROM sensor_DHT"
     return fetch_data(query_humidity)
+
+import pandas as pd
+from db_connection import fetch_data
+
+# Etat
+def get_state():
+    query = """
+        SELECT 
+            (SELECT sound_level FROM sensor_Sound ORDER BY timestamp DESC LIMIT 1) AS sound,
+            (SELECT humidity FROM sensor_DHT ORDER BY timestamp DESC LIMIT 1) AS humidity,
+            (SELECT temperature FROM sensor_DHT ORDER BY timestamp DESC LIMIT 1) AS temperature,
+            (SELECT tvoc FROM sensor_AirQuality ORDER BY timestamp DESC LIMIT 1) AS tvoc,
+            (SELECT co2 FROM sensor_AirQuality ORDER BY timestamp DESC LIMIT 1) AS co2
+    """
+
+    df = fetch_data(query)
+
+    if df.empty:
+        return 0  
+
+    sound = df["sound"].iloc[0] if pd.notna(df["sound"].iloc[0]) else 0
+    humidity = df["humidity"].iloc[0] if pd.notna(df["humidity"].iloc[0]) else 50  
+    temperature = df["temperature"].iloc[0] if pd.notna(df["temperature"].iloc[0]) else 22
+    tvoc = df["tvoc"].iloc[0] if pd.notna(df["tvoc"].iloc[0]) else 0
+    co2 = df["co2"].iloc[0] if pd.notna(df["co2"].iloc[0]) else 400 
+
+    # Vérifications des seuils
+    bool_sound = 1 if sound >= 70 else 0
+    bool_humidity = 1 if humidity >= 60 or humidity <= 40 else 0
+    bool_temp = 1 if temperature >= 25 or temperature <= 18 else 0
+    bool_tvoc = 1 if tvoc >= 750 else 0
+    bool_co2 = 1 if co2 >= 1000 else 0
+
+    return bool_sound + bool_humidity + bool_temp + bool_tvoc + bool_co2
