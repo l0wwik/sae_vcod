@@ -5,7 +5,7 @@ from psycopg2.extras import RealDictCursor
 app = Flask(__name__)
 
 # Configuration de la connexion PostgreSQL
-DATABASE_URL = "dbname=station_captation user=postgres password=root host=localhost port=5432"
+DATABASE_URL = "dbname=station_captation user=postgres password=Youtubel0wwik55110** host=localhost port=5432"
 
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)

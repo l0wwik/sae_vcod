@@ -1,0 +1,184 @@
+import paho.mqtt.client as mqtt
+import psycopg2
+import json
+import numpy as np
+import time
+import os
+from keras_facenet import FaceNet
+import cv2
+from PIL import Image
+import io
+
+# 📡 Configuration MQTT
+MQTT_BROKER = "192.168.8.5"
+MQTT_PORT = 1883
+MQTT_IMAGE_TOPIC = "station04/sensor/image"
+MQTT_SENSOR_TOPICS = [
+    "station04/sensor/DHT",
+    "station04/sensor/PIR",
+    "station04/sensor/Sound",
+    "station04/sensor/AirQuality"
+]
+IMAGE_DIR = "C:/Users/loicm/Documents/mqtt/sae_vcod/dashboard/assets/img"
+
+# 💾 Connexion PostgreSQL
+DB_NAME = "station_captation"
+DB_USER = "postgres"
+DB_PASSWORD = "Youtubel0wwik55110**"
+DB_HOST = "localhost"
+
+# 🚀 Initialisation du modèle FaceNet
+embedder = FaceNet()
+
+# 🔄 Buffer pour stocker l’image avant reconstitution
+image_chunks = []
+receiving_image = False
+
+def connect_db():
+    """Connexion à PostgreSQL"""
+    return psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST)
+
+# 📥 Sauvegarde des Données des Capteurs
+def save_sensor_data(topic, payload):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    try:
+        data = json.loads(payload)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        if topic == "station04/sensor/DHT":
+            cursor.execute("""
+                INSERT INTO sensor_DHT (timestamp, temperature, humidity)
+                VALUES (%s, %s, %s);
+            """, (timestamp, data["temperature"], data["humidity"]))
+
+        elif topic == "station04/sensor/PIR":
+            cursor.execute("""
+                INSERT INTO sensor_PIR (timestamp, motion_detected)
+                VALUES (%s, %s);
+            """, (timestamp, bool(data["move"])))
+
+        elif topic == "station04/sensor/Sound":
+            cursor.execute("""
+                INSERT INTO sensor_Sound (timestamp, sound_level)
+                VALUES (%s, %s);
+            """, (timestamp, data["Sound"]))
+
+        elif topic == "station04/sensor/AirQuality":
+            cursor.execute("""
+                INSERT INTO sensor_AirQuality (timestamp, TVoC, co2)
+                VALUES (%s, %s, %s);
+            """, (timestamp, data["TVoC"], data["co2"]))
+
+        conn.commit()
+        print(f"✅ Données enregistrées pour {topic}")
+
+    except Exception as e:
+        print(f"❌ Erreur lors de l'enregistrement des capteurs ({topic}) : {e}")
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# 📸 Sauvegarde des images en base
+def save_image_to_db(image_path):
+    conn = connect_db()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute("INSERT INTO images (image_path) VALUES (%s) RETURNING id;", (image_path,))
+        image_id = cursor.fetchone()[0]
+        conn.commit()
+        print(f"📸 Image enregistrée en base avec ID {image_id}")
+        return image_id
+
+    except Exception as e:
+        print(f"❌ Erreur lors de l'enregistrement de l'image : {e}")
+        return None
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# 📸 Traitement de l’image et détection des visages
+def process_image(image_data):
+    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+    image_path = f"{IMAGE_DIR}/image_{timestamp}.jpg"
+
+    print(f"📥 Image complète reçue - Taille : {len(image_data)} octets")
+
+    # 📌 Vérifier si l'image commence par un en-tête JPEG ou PNG
+    if not (image_data[:2] == b'\xff\xd8' or image_data[:8] == b'\x89PNG\r\n\x1a\n'):
+        print("🚨 Erreur : L'image reçue n'a pas un format valide (JPEG/PNG)")
+        with open("debug_image.bin", "wb") as f:
+            f.write(image_data)  # 📌 Sauvegarde en binaire pour analyse
+        return None, None
+
+    try:
+        image = Image.open(io.BytesIO(image_data))
+        image = image.convert("RGB")
+        image.save(image_path)
+
+        print(f"✅ Image sauvegardée : {image_path}")
+
+        return image_path, None
+
+    except Exception as e:
+        print(f"❌ Erreur lors du traitement de l'image : {e}")
+        return None, None
+
+# 📡 Réception des messages MQTT (Images)
+def on_message_image(client, userdata, msg):
+    global image_chunks, receiving_image
+
+    print(f"📥 Message reçu sur {msg.topic} - Taille : {len(msg.payload)} octets")
+
+    if msg.topic == MQTT_IMAGE_TOPIC:
+        if msg.payload == b"END":
+            print(f"🛠️ Reconstruction de l'image ({len(image_chunks)} chunks reçus)...")
+
+            # 📌 Vérifier les premiers octets après reconstruction
+            full_image_data = b"".join(image_chunks)
+            print(f"🛠️ Taille totale reconstruite : {len(full_image_data)} octets")
+            print(f"🔍 Premiers octets de l'image : {full_image_data[:20]}")
+
+            # 📌 Sauvegarder pour analyse
+            with open("debug_image_reconstructed.jpg", "wb") as f:
+                f.write(full_image_data)
+
+            image_chunks = []
+            receiving_image = False
+
+            if len(full_image_data) > 0:
+                process_image(full_image_data)
+            else:
+                print("❌ Erreur : Image reçue vide après reconstruction !")
+
+        else:
+            image_chunks.append(msg.payload)
+            receiving_image = True
+            print(f"🔄 Chunk ajouté ({len(msg.payload)} octets) - Total chunks : {len(image_chunks)}")
+
+# 📡 Réception des messages MQTT (Capteurs)
+def on_message_sensor(client, userdata, msg):
+    if msg.topic.startswith("station04/sensor/"):
+        save_sensor_data(msg.topic, msg.payload)
+
+# 📡 Connexion MQTT pour les images
+client_image = mqtt.Client()
+client_image.connect(MQTT_BROKER, MQTT_PORT)
+client_image.subscribe(MQTT_IMAGE_TOPIC)
+client_image.on_message = on_message_image
+
+# 📡 Connexion MQTT pour les capteurs
+client_sensors = mqtt.Client()
+client_sensors.connect(MQTT_BROKER, MQTT_PORT)
+for topic in MQTT_SENSOR_TOPICS:
+    client_sensors.subscribe(topic)
+client_sensors.on_message = on_message_sensor
+
+# 🚀 Lancer les deux clients MQTT
+print("📡 En attente des messages MQTT...")
+client_image.loop_start()
+client_sensors.loop_forever()
